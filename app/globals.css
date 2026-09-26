@@ -1,26 +1,212 @@
 @import "tailwindcss";
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f7f5f2;
+  --surface: #ffffff;
+  --border: #e8e4df;
+  --text-primary: #1a1816;
+  --text-secondary: #6b6560;
+  --accent: #c4622d;
+  --accent-light: #f5ede7;
+  --radius: 10px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+}
+
+/* The main container: single column, centred, max 560px */
+.container {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+/* Card surface */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+
+/* Heading styles */
+h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Muted text */
+.muted {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* The large average rating number */
+.rating-number {
+  font-size: 3.5rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+/* Accent colour — used sparingly */
+.accent {
+  color: var(--accent);
+}
+
+/* Stars */
+.star {
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--border);
+  transition: color 0.1s ease;
+  line-height: 1;
+  user-select: none;
+}
+
+.star.filled {
+  color: var(--accent);
+}
+
+.star:hover {
+  color: var(--accent);
+}
+
+/* Text area */
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  background: var(--bg);
+  resize: vertical;
+  min-height: 100px;
+  transition: border-color 0.15s ease;
+  outline: none;
+}
+
+textarea:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+/* Submit button */
+button.submit-btn {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+button.submit-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+button.submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Error message */
+.error-box {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+/* "Latest review" highlighted card */
+.latest-review-card {
+  background: var(--accent-light);
+  border: 1px solid #e8c9b8;
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+}
+
+/* Older review list item */
+.review-item {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.review-item:last-child {
+  border-bottom: none;
+}
+
+/* Link styled as subtle text */
+a.link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9375rem;
+}
+
+a.link:hover {
+  text-decoration: underline;
+}
+
+/* Spacer utility */
+.gap-sm { margin-top: 0.5rem; }
+.gap-md { margin-top: 1rem; }
+.gap-lg { margin-top: 1.5rem; }
+.gap-xl { margin-top: 2rem; }
+
+/* Row layout */
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* Label above form fields */
+label.field-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
