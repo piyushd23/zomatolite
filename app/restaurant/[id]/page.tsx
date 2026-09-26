@@ -1,18 +1,24 @@
 // app/restaurant/[id]/page.tsx
 // Screen 2: Restaurant detail page
 //
-// This is a Server Component — it runs on the server, fetches data,
-// and sends finished HTML to the browser. No JavaScript runs in the browser
-// for this page.
+// This is a Server Component — it runs on Vercel's server, queries the database
+// DIRECTLY using sql from lib/db.ts, and sends finished HTML to the browser.
+//
+// Before, this page was fetching from http://localhost:3002/api/restaurants/[id].
+// That worked locally but crashed on Vercel because Vercel's server has no
+// "localhost:3002" — there is no dev server running there.
+//
+// The fix: server components don't need to go through HTTP to reach their own
+// database. They can call the database directly. Simpler and faster.
 //
 // IMPORTANT: This page does ZERO maths.
-// It receives averageRating as a number from the API and prints it.
-// There is no addition, division, or sorting anywhere in this file.
+// averageRating is computed by AVG() in the SQL query below.
+// This file receives a number and prints it. That is all.
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { sql } from "@/lib/db";
 
-// The shape of data our API returns
 interface Review {
   id: number;
   rating: number;
@@ -20,31 +26,7 @@ interface Review {
   createdAt: string;
 }
 
-interface RestaurantData {
-  name: string;
-  cuisine: string;
-  area: string;
-  averageRating: number | null;
-  totalReviews: number;
-  latestReview: Review | null;
-  reviews: Review[];
-}
-
-// Fetches data from our own API endpoint
-async function getRestaurant(id: string): Promise<RestaurantData | null> {
-  // We build the URL using the environment variable so it works in production too
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3002";
-  const res = await fetch(`${baseUrl}/api/restaurants/${id}`, {
-    cache: "no-store", // Always get fresh data, never show a cached version
-  });
-
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Failed to fetch restaurant data.");
-
-  return res.json();
-}
-
-// Renders a row of stars for display (not clickable — this is read-only)
+// Renders a row of stars for display (read-only, not clickable)
 function StarDisplay({ rating }: { rating: number }) {
   return (
     <span>
@@ -60,7 +42,6 @@ function StarDisplay({ rating }: { rating: number }) {
   );
 }
 
-// Formats a date string into something human-readable like "Sep 24, 2026"
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", {
     day: "numeric",
@@ -75,54 +56,116 @@ export default async function RestaurantPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const data = await getRestaurant(id);
+  const restaurantId = parseInt(id, 10);
 
-  // If the restaurant doesn't exist, show Next.js built-in 404 page
-  if (!data) notFound();
+  if (isNaN(restaurantId)) notFound();
+
+  // --- Query 1: Does this restaurant exist? ---
+  const restaurantRows = await sql`
+    SELECT id, name, cuisine, area
+    FROM restaurants
+    WHERE id = ${restaurantId}
+  `;
+
+  if (restaurantRows.length === 0) notFound();
+
+  const restaurant = restaurantRows[0];
+
+  // --- Query 2: Aggregate stats ---
+  // AVG(rating) computes the average. The database does the maths.
+  // ROUND(..., 1) rounds to one decimal place. Also in the database.
+  // COUNT(*) counts all reviews. Also in the database.
+  // THIS PAGE DOES ZERO MATHS. It receives these numbers and prints them.
+  const statsRows = await sql`
+    SELECT
+      ROUND(AVG(rating)::numeric, 1) AS "averageRating",
+      COUNT(*)::integer              AS "totalReviews"
+    FROM reviews
+    WHERE restaurant_id = ${restaurantId}
+  `;
+
+  const averageRating =
+    statsRows[0]["averageRating"] !== null
+      ? parseFloat(statsRows[0]["averageRating"])
+      : null;
+  const totalReviews = statsRows[0]["totalReviews"] as number;
+
+  // --- Query 3: Get all reviews, newest first ---
+  const allReviews = await sql`
+    SELECT id, rating, comment, created_at AS "createdAt"
+    FROM reviews
+    WHERE restaurant_id = ${restaurantId}
+    ORDER BY created_at DESC
+  `;
+
+  const latestReview = allReviews.length > 0 ? (allReviews[0] as Review) : null;
+  const olderReviews = allReviews.slice(1) as Review[];
 
   return (
     <div className="container">
       {/* Restaurant name, cuisine, area */}
-      <h1>{data.name}</h1>
+      <h1>{restaurant.name}</h1>
       <p className="muted gap-sm">
-        {data.cuisine} · {data.area}
+        {restaurant.cuisine} · {restaurant.area}
       </p>
 
       {/* Average rating — the biggest thing on the page */}
-      {/* THIS IS WHERE THE AVERAGE IS PRINTED. There is no maths here. */}
-      {/* We received 4.3 from the API and we print 4.3. That is all. */}
+      {/* THIS IS WHERE THE AVERAGE IS PRINTED. No maths here. */}
+      {/* We received averageRating from AVG() in SQL and we print it. That is all. */}
       <div className="gap-xl">
-        {data.averageRating !== null ? (
+        {averageRating !== null ? (
           <div className="row" style={{ alignItems: "baseline" }}>
-            <span className="rating-number">{data.averageRating}</span>
-            <span className="muted">/ 5 &nbsp;·&nbsp; {data.totalReviews} {data.totalReviews === 1 ? "review" : "reviews"}</span>
+            <span className="rating-number">{averageRating}</span>
+            <span className="muted">
+              / 5 &nbsp;·&nbsp; {totalReviews}{" "}
+              {totalReviews === 1 ? "review" : "reviews"}
+            </span>
           </div>
         ) : (
-          <p className="muted" style={{ fontSize: "1rem" }}>No ratings yet.</p>
+          <p className="muted" style={{ fontSize: "1rem" }}>
+            No ratings yet.
+          </p>
         )}
       </div>
 
       {/* Latest review — visually highlighted */}
-      {data.latestReview !== null ? (
+      {latestReview !== null ? (
         <div className="gap-xl">
-          <p className="muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, marginBottom: "0.5rem" }}>
+          <p
+            className="muted"
+            style={{
+              fontSize: "0.75rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              fontWeight: 600,
+              marginBottom: "0.5rem",
+            }}
+          >
             Most Recent
           </p>
           <div className="latest-review-card">
             <div className="row" style={{ marginBottom: "0.5rem" }}>
-              <StarDisplay rating={data.latestReview.rating} />
+              <StarDisplay rating={latestReview.rating} />
               <span className="muted" style={{ fontSize: "0.8rem" }}>
-                {formatDate(data.latestReview.createdAt)}
+                {formatDate(latestReview.createdAt)}
               </span>
             </div>
-            <p style={{ fontSize: "0.9375rem" }}>{data.latestReview.comment}</p>
+            <p style={{ fontSize: "0.9375rem" }}>{latestReview.comment}</p>
           </div>
         </div>
       ) : (
         /* Empty state — no reviews yet */
-        <div className="gap-xl card" style={{ textAlign: "center", padding: "2.5rem 1.5rem" }}>
-          <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>No reviews yet</p>
-          <p className="muted" style={{ marginBottom: "1.25rem", fontSize: "0.9rem" }}>
+        <div
+          className="gap-xl card"
+          style={{ textAlign: "center", padding: "2.5rem 1.5rem" }}
+        >
+          <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>
+            No reviews yet
+          </p>
+          <p
+            className="muted"
+            style={{ marginBottom: "1.25rem", fontSize: "0.9rem" }}
+          >
             Be the first to share your experience.
           </p>
           <Link href={`/review/${id}`} className="link">
@@ -132,11 +175,14 @@ export default async function RestaurantPage({
       )}
 
       {/* Older reviews list */}
-      {data.reviews.length > 0 && (
+      {olderReviews.length > 0 && (
         <div className="gap-xl">
           <h2>All reviews</h2>
-          <div className="gap-md" style={{ borderTop: "1px solid var(--border)" }}>
-            {data.reviews.map((review) => (
+          <div
+            className="gap-md"
+            style={{ borderTop: "1px solid var(--border)" }}
+          >
+            {olderReviews.map((review) => (
               <div key={review.id} className="review-item">
                 <div className="row" style={{ marginBottom: "0.25rem" }}>
                   <StarDisplay rating={review.rating} />
@@ -144,7 +190,12 @@ export default async function RestaurantPage({
                     {formatDate(review.createdAt)}
                   </span>
                 </div>
-                <p style={{ fontSize: "0.9375rem", color: "var(--text-primary)" }}>
+                <p
+                  style={{
+                    fontSize: "0.9375rem",
+                    color: "var(--text-primary)",
+                  }}
+                >
                   {review.comment}
                 </p>
               </div>
@@ -153,8 +204,8 @@ export default async function RestaurantPage({
         </div>
       )}
 
-      {/* Link to write a review — always shown */}
-      {data.latestReview !== null && (
+      {/* Link to write a review — always shown when reviews exist */}
+      {latestReview !== null && (
         <div className="gap-xl">
           <Link href={`/review/${id}`} className="link">
             + Write a review

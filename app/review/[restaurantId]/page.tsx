@@ -1,24 +1,14 @@
 // app/review/[restaurantId]/page.tsx
 // Screen 1: Write a review
 //
-// This is a Server Component — it fetches the restaurant name on the server
-// so we can show "Reviewing: Ludhiana Burrito" at the top before the form loads.
+// This is a Server Component — it fetches the restaurant name DIRECTLY from
+// the database (not via HTTP) so we can show it at the top of the form.
 // The interactive form itself (ReviewForm.tsx) is a Client Component.
 
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { sql } from "@/lib/db";
 import ReviewForm from "./ReviewForm";
-
-async function getRestaurantName(id: string): Promise<string | null> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3002";
-  const res = await fetch(`${baseUrl}/api/restaurants/${id}`, {
-    cache: "no-store",
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Failed to fetch restaurant.");
-  const data = await res.json();
-  return data.name as string;
-}
 
 export default async function ReviewPage({
   params,
@@ -26,16 +16,27 @@ export default async function ReviewPage({
   params: Promise<{ restaurantId: string }>;
 }) {
   const { restaurantId } = await params;
-  const restaurantName = await getRestaurantName(restaurantId);
-
-  if (restaurantName === null) notFound();
-
   const idAsNumber = parseInt(restaurantId, 10);
+
+  if (isNaN(idAsNumber)) notFound();
+
+  // Query the restaurant name directly — no HTTP, no localhost
+  const rows = await sql`
+    SELECT name FROM restaurants WHERE id = ${idAsNumber}
+  `;
+
+  if (rows.length === 0) notFound();
+
+  const restaurantName = rows[0].name as string;
 
   return (
     <div className="container">
       {/* Back link */}
-      <Link href={`/restaurant/${restaurantId}`} className="link" style={{ fontSize: "0.875rem" }}>
+      <Link
+        href={`/restaurant/${restaurantId}`}
+        className="link"
+        style={{ fontSize: "0.875rem" }}
+      >
         ← Back to {restaurantName}
       </Link>
 
